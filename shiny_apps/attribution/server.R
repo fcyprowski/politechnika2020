@@ -5,14 +5,16 @@ library(pool)
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
-  con = DBI::dbConnect(
+  conf = config::get(NULL, "default", "config.yaml")$frontend_database
+  pool = pool::dbPool(
     RPostgreSQL::PostgreSQL(),
-    host = 'politechnika.postgres.database.azure.com',
-    db = "postgres",
-    user = "filipcyprowski@politechnika",
-    password = Sys.getenv("PASSWORD"),
-    port = 5432
+    host = conf$host,
+    db = conf$db,
+    user = conf$user,
+    password = conf$password,
+    port = conf$port
   )
+  con = pool::poolCheckout(pool)
   output$markov_results = renderPlotly({
     tbl(con, "facts_result") %>%
       arrange(desc(total_conversions)) %>%
