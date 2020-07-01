@@ -1,0 +1,78 @@
+
+---
+title: "spark-spark-apply"
+output:
+  html_document:
+    toc: true
+---
+
+
+```{r}
+library(sparklyr)
+library(dplyr)
+# config["spark.r.command"] <- "<path-to-r-version>"
+
+sc = spark_connect(
+  method = "databricks"
+  #, config = config
+)
+sdf_len(sc, 10)
+```
+
+
+```{r}
+multiply_by_10 = function(x) 10 * x
+sdf_len(sc, 10) %>% spark_apply(multiply_by_10)
+# sdf_len(sc, 10) %>% spark_apply(function(x) 10 * x)
+# sdf_len(sc, 10) %>% spark_apply(~ 10 * .x)
+
+```
+
+
+```{r}
+# uwaga! sparklyr samodzielnie partycjonuje dane, które do niego wpuszczamy
+sdf_len(sc, 10) %>% sdf_num_partitions()
+```
+
+
+```{r}
+dane = sdf_len(sc, 10) %>% collect()
+```
+
+
+```{r}
+nrow(dane)
+```
+
+
+```{r}
+# tutaj widać najlepiej:
+sdf_len(sc, 10) %>% spark_apply(nrow)
+```
+
+
+```{r}
+# można oczywiście bez problemu zmienić liczbę partycji funkcją sdf_repartition
+sdf_len(sc, 10) %>%
+  spark_apply(~nrow(.x)) %>%
+  # do tego momentu wykorzystaliśmy zrównoleglone obliczenia
+  # tutaj sprowadzamy wszystko do jednej tabeli:
+  sdf_repartition(1) %>%
+  spark_apply(~sum(.x))
+```
+
+
+```{r}
+# library("arrow")
+# Dlaczego to nie działa? Czyli wpuszczanie zdeklarowanej wcześniej zmiennej do obliczeń
+dane = spark_read_csv(sc, "rawdata", "dbfs:/mnt/shinyapp/attribution.tsv", delimiter = "\t")
+
+```
+
+
+```{r}
+dane %>% 
+  sdf_repartition(4) %>%
+  spark_apply(function(e) head(e))
+```
+

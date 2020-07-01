@@ -1,4 +1,4 @@
-
+# 
 # con = DBI::dbConnect(
 #   RPostgreSQL::PostgreSQL(),
 #   host = 'politechnika.postgres.database.azure.com',

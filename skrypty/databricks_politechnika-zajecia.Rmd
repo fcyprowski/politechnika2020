@@ -1,0 +1,115 @@
+
+---
+title: "politechnika-zajecia"
+output:
+  html_document:
+    toc: true
+---
+
+
+```{r}
+%scala
+val configs = Map(
+  "dfs.adls.oauth2.access.token.provider.type" -> "ClientCredential",
+  "dfs.adls.oauth2.client.id" -> "3aaa0c97-9873-4b09-a842-107726851d35",
+  "dfs.adls.oauth2.credential" -> "0QQoz6C.TXOoudiuctZJ_YDQG0-2p.VI_B",
+  "dfs.adls.oauth2.refresh.url" -> "https://login.microsoftonline.com/47998d7f-14d1-42c6-abc2-8c024a6c156f/oauth2/token")
+
+dbutils.fs.mount(
+  source = "adl://shinyapp.azuredatalakestore.net/",
+  mountPoint = "/mnt/shinyapp",
+  extraConfigs = configs)
+```
+
+
+```{r}
+library(sparklyr)
+library(dplyr)
+library(stringr)
+library(httr)
+library(jsonlite)
+library(curl)
+if (!require("ChannelAttribution")) install.packages("ChannelAttribution")
+```
+
+
+```{r}
+sc = spark_connect(method = "databricks")
+```
+
+
+```{r}
+dane = spark_read_csv(sc, "rawdata", "dbfs:/mnt/shinyapp/attribution.tsv", delimiter = "\t")
+```
+
+
+```{sql}
+select * from rawdata limit 1000
+```
+
+```{r}
+product = dane %>%
+  mutate(conversion = if_else(timeOnPage > 15, 1, 0),
+         medium = regexp_replace(medium, " ", "_")) %>%
+  group_by(client_id) %>%
+  arrange(ts) %>%
+  summarise(path = paste(collect_set(medium)),
+            total_conversions = sum(conversion),
+            total_page_time = sum(timeOnPage)) %>% 
+  mutate(path = regexp_replace(path, " ", " > ")) %>%
+  group_by(path) %>%
+  summarise(total_conversions = sum(total_conversions)) %>%
+  collect()
+```
+
+
+```{r}
+model = ChannelAttribution::markov_model(
+  product, 
+  var_path = "path", 
+  var_conv = "total_conversions", 
+  out_more = TRUE
+)
+result = model$result
+```
+
+
+```{r}
+get_token = function() {
+  h = new_handle()
+  handle_setform(h,
+                 "grant_type"="client_credentials",
+                 "resource"="https://management.core.windows.net/",
+                 "client_id"="3aaa0c97-9873-4b09-a842-107726851d35",
+                 "client_secret"="0QQoz6C.TXOoudiuctZJ_YDQG0-2p.VI_B"
+  )
+  req = curl_fetch_memory("https://login.windows.net/47998d7f-14d1-42c6-abc2-8c024a6c156f/oauth2/token", handle = h)
+  res = fromJSON(rawToChar(req$content))
+}
+upload = function(result) {
+  filename = paste0("paths.tsv")
+  readr::write_tsv(result, filename)
+  token = paste0('"Authorization: Bearer ',  get_token()$access_token, '"')
+  destination = paste0("backend/", gsub(" |:|-", "", Sys.time()), "paths.tsv")
+  full_command = paste0("curl -iv -X PUT -L -T '", filename, "' -H ", token, " 'https://shinyapp.azuredatalakestore.net/webhdfs/v1/", destination, "?op=CREATE'")
+  system(full_command)
+}
+
+```
+
+
+```{r}
+# httr::PUT("https://shinyapp.azuredatalakestore.net/webhdfs/v1/backend/?op=MKDIRS",
+#                add_headers(Authorization =  paste(res$token_type,res$access_token)))
+```
+
+
+```{r}
+upload(product)
+```
+
+
+```{r}
+
+```
+

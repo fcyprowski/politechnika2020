@@ -14,9 +14,9 @@ shinyServer(function(input, output) {
     password = conf$password,
     port = conf$port
   )
-  con = pool::poolCheckout(pool)
   output$markov_results = renderPlotly({
-    tbl(con, "facts_result") %>%
+    con = pool::poolCheckout(pool)
+    p = tbl(con, "facts_result") %>%
       arrange(desc(total_conversions)) %>%
       head(input$channels) %>%
       collect() %>%
@@ -28,9 +28,12 @@ shinyServer(function(input, output) {
               text = ~hover_text) %>% 
       add_bars() %>%
       layout(barmode = "stack")
+    pool::poolReturn(con)
+    return(p)
   })
   output$markov_results_longtail = renderPlotly({
-    tbl(con, "facts_result") %>%
+    con = pool::poolCheckout(pool)
+    p = tbl(con, "facts_result") %>%
       arrange(desc(total_conversions)) %>%
       head(input$channels2) %>%
       collect() %>%
@@ -39,6 +42,8 @@ shinyServer(function(input, output) {
               x = ~channel_name) %>% 
       add_bars() %>%
       layout(barmode = "stack")
+    pool::poolReturn(con)
+    return(p)
   })
   # output$removal_effects = renderPlot(
   #   
@@ -50,5 +55,5 @@ shinyServer(function(input, output) {
   #   
   # )
   
-  onStop(function() DBI::dbDisconnect(con))
+  # onStop(function() DBI::dbDisconnect(con))
 })
