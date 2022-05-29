@@ -1,4 +1,5 @@
 library("shiny")
+library("plotly")
 
 # Define UI for application that draws a histogram
 shinyUI(
@@ -26,7 +27,10 @@ shinyUI(
         )
       )
     ),
-    tabPanel("tab 2", "contents"),
+    tabPanel(
+      "Plotly",
+      plotlyOutput("depth_plot")
+    ),
     tabPanel("tab 3", "contents")
   )
   
